@@ -154,7 +154,14 @@ body {
   min-height: 100vh;
   -webkit-text-size-adjust: 100%;
 }
-.page { max-width: 1180px; margin: 0 auto; padding: 1.25rem 1.5rem 5rem; }
+.page {
+  max-width: 1180px; margin: 0 auto;
+  /* Respect the iPhone notch / Dynamic Island and the home indicator
+     (viewport-fit=cover lets content draw into these regions). */
+  padding:
+    calc(1.25rem + env(safe-area-inset-top)) calc(1.5rem + env(safe-area-inset-right))
+    calc(5rem + env(safe-area-inset-bottom)) calc(1.5rem + env(safe-area-inset-left));
+}
 
 .topbar {
   display: flex; justify-content: space-between; align-items: center;
@@ -714,7 +721,9 @@ body {
 /* z-index sits ABOVE the modal backdrop (50) so the user can keep using
    the metronome while a card is open fullscreen. */
 .metro {
-  position: fixed; bottom: 1rem; right: 1rem; z-index: 70;
+  position: fixed; z-index: 70;
+  bottom: calc(1rem + env(safe-area-inset-bottom));
+  right: calc(1rem + env(safe-area-inset-right));
   display: flex; flex-direction: column; align-items: flex-end;
 }
 .metro-btn {
