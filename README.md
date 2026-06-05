@@ -1,5 +1,7 @@
 # Louis' E Blues
 
+**Live:** https://brona90.github.io/louisblues/
+
 A standalone, offline-capable practice app for the E 12-bar blues on
 guitar — the form, the three dominant 7 chords in every position up the
 neck, the scales, the licks, the shuffle rhythms, and a daily routine.
@@ -46,7 +48,7 @@ Requires Python 3 and ImageMagick (`magick`) to rasterise the SVG icon.
 
 ## Install on iOS
 
-1. Visit the deployed URL in mobile Safari.
+1. Visit https://brona90.github.io/louisblues/ in mobile Safari.
 2. Tap the share icon → **Add to Home Screen**.
 3. The app installs with the icon, launches in standalone mode, and
    works offline thanks to the service worker.
@@ -112,4 +114,5 @@ louisblues/
 
 Pushing to `main` triggers `.github/workflows/deploy.yml`, which sets up
 Python and ImageMagick, runs `build.py`, and publishes the result to
-GitHub Pages. Enable Pages in repo settings, source = "GitHub Actions".
+GitHub Pages — live at https://brona90.github.io/louisblues/. Pages is
+configured with source = "GitHub Actions".
