@@ -31,9 +31,12 @@ jobs:
         run: python3 build.py
 
       - name: Assemble dist
+        shell: bash
         run: |
           mkdir -p dist
+          shopt -s nullglob
           cp -r *.html *.png *.svg *.webmanifest *.js dist/
+          ls -1 dist
 
       - name: Configure Pages
         uses: actions/configure-pages@v5

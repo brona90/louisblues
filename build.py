@@ -46,14 +46,21 @@ def build_apple_touch_icon():
     if not os.path.exists(icon_svg):
         print(f'[skip png] no icon.svg yet')
         return
-    try:
-        subprocess.run(
-            ['magick', icon_svg, '-resize', '180x180', out_png],
-            check=True, capture_output=True,
-        )
-        print(f'[png ok] {os.path.basename(out_png)}')
-    except (FileNotFoundError, subprocess.CalledProcessError) as e:
-        print(f'[png skip] {e}')
+    # ImageMagick 7 ships `magick`; v6 (e.g. Ubuntu apt) ships `convert`.
+    for cmd in (['magick'], ['convert']):
+        try:
+            subprocess.run(
+                cmd + [icon_svg, '-resize', '180x180', out_png],
+                check=True, capture_output=True,
+            )
+            print(f'[png ok] {os.path.basename(out_png)} (via {cmd[0]})')
+            return
+        except FileNotFoundError:
+            continue
+        except subprocess.CalledProcessError as e:
+            print(f'[png skip] {cmd[0]} failed: {e}')
+            return
+    print('[png skip] neither magick nor convert found')
 
 
 def main():
