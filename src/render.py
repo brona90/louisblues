@@ -5,6 +5,7 @@
 """
 
 import base64
+import html
 import json
 import os
 import time
@@ -91,7 +92,7 @@ ICON_DATA_URI = 'data:image/svg+xml;base64,' + base64.b64encode(ICON_SVG.encode(
 def _read_font(name):
     p = os.path.join(SRC, name)
     if os.path.exists(p):
-        return open(p).read().strip()
+        return open(p, encoding='utf-8').read().strip()
     return ''
 
 FONT_REGULAR = _read_font('font_regular.b64')
@@ -634,7 +635,9 @@ body {
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
   display: none; align-items: center; justify-content: center;
-  touch-action: none;
+  /* pan-y lets a tall modal body scroll vertically on iOS while we still
+     handle horizontal swipes for card navigation in JS. */
+  touch-action: pan-y;
 }
 .modal-backdrop.open { display: flex; }
 .modal-frame {
@@ -813,12 +816,12 @@ const Audio = (() => {
     for (let i = 0; i < period; i++) {
       delay[i] = (Math.random() * 2 - 1) * 0.45;
     }
-    // Three smoothing passes — softens the pluck. Each pass is a 2-tap average.
+    // Three smoothing passes — softens the pluck. Each pass is a true 2-tap
+    // moving average over a snapshot, so it doesn't cascade as an in-place IIR.
     for (let pass = 0; pass < 3; pass++) {
-      const carry = delay[period - 1];
+      const prev = Float32Array.from(delay);
       for (let i = 0; i < period; i++) {
-        const nxt = (i + 1) % period;
-        delay[i] = (delay[i] + delay[nxt]) * 0.5;
+        delay[i] = (prev[i] + prev[(i + 1) % period]) * 0.5;
       }
     }
     // Process
@@ -958,7 +961,10 @@ const Audio = (() => {
     const modalPlay = document.getElementById('modal-play');
     if (modalPlay) modalPlay.classList.remove('playing');
   }
-  return {pluck, strum, playSequence, playScaleAscDesc, getCtx, freqFor, stopAll, setVolume};
+  // Expose the master gain node so other sources (e.g. the metronome click)
+  // route through the same volume control instead of straight to destination.
+  function getMaster() { getCtx(); return master; }
+  return {pluck, strum, playSequence, playScaleAscDesc, getCtx, getMaster, freqFor, stopAll, setVolume};
 })();
 
 // ── Tempo (single source of truth — the metronome bpm slider) ────────
@@ -1009,6 +1015,7 @@ function cancelLoop() {
   const cards = Array.from(document.querySelectorAll('.card'));
   if (!cards.length) return;
   const backdrop = document.getElementById('modal-backdrop');
+  const frame = backdrop.querySelector('.modal-frame');
   const titleEl = document.getElementById('modal-title');
   const roleEl = document.getElementById('modal-role');
   const bodyEl = document.getElementById('modal-body');
@@ -1017,6 +1024,7 @@ function cancelLoop() {
   const closeBtn = document.getElementById('modal-close');
   const playBtn = document.getElementById('modal-play');
   let idx = -1;
+  let lastTrigger = null;   // element to restore focus to when the modal closes
 
   function render() {
     if (typeof stopCard === 'function') stopCard();
@@ -1046,10 +1054,41 @@ function cancelLoop() {
       lb.classList.toggle('active', loopMode !== 0);
     }
   }
-  function open(i) { idx = i; render(); backdrop.classList.add('open'); document.body.style.overflow = 'hidden'; }
+  function open(i) {
+    // Remember what triggered the modal so we can restore focus on close.
+    lastTrigger = (document.activeElement && cards.includes(document.activeElement.closest('.card')))
+      ? document.activeElement.closest('.card')
+      : cards[i];
+    idx = i; render(); backdrop.classList.add('open'); document.body.style.overflow = 'hidden';
+    // Move focus into the dialog (the close button).
+    closeBtn.focus();
+  }
   function close() {
     if (typeof stopCard === 'function') stopCard();
     backdrop.classList.remove('open'); document.body.style.overflow = ''; idx = -1;
+    // Restore focus to the triggering card.
+    if (lastTrigger && typeof lastTrigger.focus === 'function') lastTrigger.focus();
+    lastTrigger = null;
+  }
+
+  // Focusable elements currently visible inside the modal frame.
+  function modalFocusables() {
+    return Array.from(frame.querySelectorAll(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    )).filter(el => !el.disabled && el.offsetParent !== null);
+  }
+  // Trap Tab / Shift-Tab inside the modal frame while open.
+  function trapTab(e) {
+    if (e.key !== 'Tab') return;
+    const f = modalFocusables();
+    if (!f.length) { e.preventDefault(); return; }
+    const first = f[0], last = f[f.length - 1];
+    const active = document.activeElement;
+    if (e.shiftKey) {
+      if (active === first || !frame.contains(active)) { e.preventDefault(); last.focus(); }
+    } else {
+      if (active === last || !frame.contains(active)) { e.preventDefault(); first.focus(); }
+    }
   }
 
   cards.forEach((c, i) => {
@@ -1072,6 +1111,7 @@ function cancelLoop() {
   backdrop.addEventListener('click', (e) => { if (e.target === backdrop) close(); });
   document.addEventListener('keydown', (e) => {
     if (!backdrop.classList.contains('open')) return;
+    if (e.key === 'Tab') { trapTab(e); return; }
     if (e.key === 'Escape') close();
     else if (e.key === 'ArrowLeft' && idx > 0) { idx--; render(); }
     else if (e.key === 'ArrowRight' && idx < cards.length - 1) { idx++; render(); }
@@ -1112,15 +1152,20 @@ function cancelLoop() {
   window.addEventListener('hashchange', openFromHash);
 
   // Swipe gestures in modal
-  let tx = null;
+  let tx = null, ty = null;
   backdrop.addEventListener('touchstart', (e) => {
     if (e.target.closest('.modal-actions') || e.target.closest('button')) return;
     tx = e.touches[0].clientX;
+    ty = e.touches[0].clientY;
   });
   backdrop.addEventListener('touchend', (e) => {
     if (tx === null) return;
     const dx = (e.changedTouches[0].clientX) - tx;
-    tx = null;
+    const dy = (e.changedTouches[0].clientY) - ty;
+    tx = null; ty = null;
+    // Only treat as horizontal card-nav when the gesture is mostly horizontal —
+    // a mostly-vertical swipe should scroll the (possibly tall) modal body.
+    if (Math.abs(dx) <= Math.abs(dy)) return;
     if (Math.abs(dx) < 60) return;
     if (dx < 0 && idx < cards.length - 1) { idx++; render(); }
     else if (dx > 0 && idx > 0) { idx--; render(); }
@@ -1130,57 +1175,76 @@ function cancelLoop() {
 // ── Card play buttons ────────────────────────────────────────────────
 let currentPlayTimeout = null;
 
-// Track every pending highlight setTimeout so Stop can cancel them.
-const highlightTimers = new Set();
+// ── Highlight scheduler (rAF, audio-clock-locked) ────────────────────
+// Lighting the dots/tab-notes used to fire on a setTimeout timeline that
+// drifts from the audio clock under tab-backgrounding and accumulates jitter
+// over long sequences. Instead, a single rAF loop holds every pending
+// highlight event {el, when, until} and, each frame, compares the live audio
+// clock (Audio.getCtx().currentTime) against `when`/`until` to toggle `.lit`.
+// Because it reads the audio clock — not wall time — it re-syncs exactly even
+// after the tab was backgrounded (rAF pauses, but on resume the clock has
+// advanced, so overdue notes light then immediately un-light correctly).
+const HIGHLIGHT_LIT_SEC = 0.72;   // how long a note stays lit (was 720ms)
+let highlightEvents = [];          // {el, when, until, lit}
+let highlightRaf = null;
 
-function _trackedTimeout(fn, ms) {
-  const id = setTimeout(() => {
-    highlightTimers.delete(id);
-    fn();
-  }, ms);
-  highlightTimers.add(id);
-  return id;
+function _highlightTick() {
+  const ctx = Audio.getCtx();
+  const now = ctx.currentTime;
+  let anyPending = false;
+  for (const ev of highlightEvents) {
+    if (ev.done) continue;
+    if (!ev.lit && now >= ev.when && now < ev.until) {
+      // Audio clock has reached this note — light it.
+      ev.el.classList.remove('lit');
+      void ev.el.getBoundingClientRect();   // restart any CSS transition
+      ev.el.classList.add('lit');
+      ev.lit = true;
+    }
+    if (now >= ev.until) {
+      // Note (and its lit window) has passed — un-light and retire.
+      if (ev.lit) ev.el.classList.remove('lit');
+      ev.done = true;
+    } else {
+      anyPending = true;
+    }
+  }
+  if (anyPending) {
+    highlightRaf = requestAnimationFrame(_highlightTick);
+  } else {
+    // Nothing left to do — drop the loop and clear the (all-retired) list.
+    highlightRaf = null;
+    highlightEvents = [];
+  }
 }
 
-function highlightDotIn(scopeEl, stringNum, fret) {
-  if (!scopeEl) return;
-  const dots = scopeEl.querySelectorAll(
-    `circle.fret-dot[data-s="${stringNum}"][data-f="${fret}"]`
-  );
-  dots.forEach(dot => {
-    dot.classList.remove('lit');
-    void dot.getBoundingClientRect();
-    dot.classList.add('lit');
-    _trackedTimeout(() => dot.classList.remove('lit'), 720);
-  });
+function _scheduleHighlight(el, when) {
+  if (!el) return;
+  highlightEvents.push({el, when, until: when + HIGHLIGHT_LIT_SEC, lit: false, done: false});
+  if (highlightRaf === null) highlightRaf = requestAnimationFrame(_highlightTick);
 }
 
 function highlightDot(scopeEl, stringNum, fret, when) {
   if (!scopeEl) return;
-  const ctx = Audio.getCtx();
-  const delayMs = Math.max(0, (when - ctx.currentTime) * 1000);
-  _trackedTimeout(() => highlightDotIn(scopeEl, stringNum, fret), delayMs);
+  const dots = scopeEl.querySelectorAll(
+    `circle.fret-dot[data-s="${stringNum}"][data-f="${fret}"]`
+  );
+  dots.forEach(dot => _scheduleHighlight(dot, when));
 }
 
 // Light up the tab-note at the given sequence index inside scopeEl.
 function highlightTabNote(scopeEl, idx, when) {
   if (!scopeEl || idx == null) return;
-  const ctx = Audio.getCtx();
-  const delayMs = Math.max(0, (when - ctx.currentTime) * 1000);
-  _trackedTimeout(() => {
-    scopeEl.querySelectorAll(`.tab-note[data-i="${idx}"]`).forEach(el => {
-      el.classList.remove('lit');
-      void el.getBoundingClientRect();
-      el.classList.add('lit');
-      _trackedTimeout(() => el.classList.remove('lit'), 720);
-    });
-  }, delayMs);
+  scopeEl.querySelectorAll(`.tab-note[data-i="${idx}"]`).forEach(el => {
+    _scheduleHighlight(el, when);
+  });
 }
 
-// Cancel every pending highlight + clear .lit from anything currently lit.
+// Cancel every pending highlight: stop the rAF loop + clear all `.lit`.
 function cancelHighlights() {
-  highlightTimers.forEach(id => clearTimeout(id));
-  highlightTimers.clear();
+  if (highlightRaf !== null) { cancelAnimationFrame(highlightRaf); highlightRaf = null; }
+  highlightEvents.forEach(ev => { if (ev.el) ev.el.classList.remove('lit'); });
+  highlightEvents = [];
   document.querySelectorAll('circle.fret-dot.lit').forEach(d => d.classList.remove('lit'));
   document.querySelectorAll('.tab-note.lit').forEach(d => d.classList.remove('lit'));
 }
@@ -1421,7 +1485,8 @@ document.querySelectorAll('.card-play').forEach(btn => {
     g.gain.setValueAtTime(0.0001, time);
     g.gain.exponentialRampToValueAtTime(0.32, time + 0.001);
     g.gain.exponentialRampToValueAtTime(0.0001, time + 0.05);
-    o.connect(g); g.connect(c.destination);
+    // Route through master so the volume slider affects the click too.
+    o.connect(g); g.connect(Audio.getMaster() || c.destination);
     o.start(time); o.stop(time + 0.06);
   }
   function scheduler() {
@@ -1544,7 +1609,8 @@ if ('serviceWorker' in navigator) {
 
 def _topbar(current_slug, exercises):
     options = ''.join(
-        f'<option value="{e["slug"]}.html"{" selected" if e["slug"] == current_slug else ""}>{e["title_one"]} {e["title_em"]}</option>'
+        f'<option value="{html.escape(e["slug"], quote=True)}.html"{" selected" if e["slug"] == current_slug else ""}>'
+        f'{html.escape(e["title_one"], quote=True)} {html.escape(e["title_em"], quote=True)}</option>'
         for e in exercises
     )
     return f'''<div class="topbar">
@@ -1559,10 +1625,11 @@ def _topbar(current_slug, exercises):
 
 
 def _title_block(ex):
+    # eyebrow / title_one / title_em / subtitle are plain text — escape at sink.
     return f'''<header class="title-block">
-  <p class="eyebrow">{ex["eyebrow"]}</p>
-  <h1>{ex["title_one"]} <em>{ex["title_em"]}</em></h1>
-  <p class="subtitle">{ex["subtitle"]}</p>
+  <p class="eyebrow">{html.escape(ex["eyebrow"], quote=True)}</p>
+  <h1>{html.escape(ex["title_one"], quote=True)} <em>{html.escape(ex["title_em"], quote=True)}</em></h1>
+  <p class="subtitle">{html.escape(ex["subtitle"], quote=True)}</p>
 </header>'''
 
 
@@ -1585,17 +1652,21 @@ def _card_html(c):
     caption = c.get("caption", "")
     num = c.get("num", "")
     audio = c.get("audio")
+    # title/role are plain text; escape them at the HTML sinks (attribute +
+    # tight element contexts). body/caption are INTENTIONAL prose HTML — never escape.
+    title_esc = html.escape(title, quote=True)
+    role_esc = html.escape(role, quote=True)
     audio_attr = ''
     play_btn = ''
     if audio:
         audio_attr = f' data-audio=\'{json.dumps(audio)}\''
         play_btn = '<button class="card-play" type="button" aria-label="Play"></button>'
     return (
-        f'<article class="card" data-title="{title}" data-role="{role}"{audio_attr}>'
+        f'<article class="card" data-title="{title_esc}" data-role="{role_esc}"{audio_attr}>'
         + play_btn
         + (f'<div class="key-num">{num}</div>' if num else '')
-        + (f'<h3>{title}</h3>' if title else '')
-        + (f'<p class="role">{role}</p>' if role else '')
+        + (f'<h3>{title_esc}</h3>' if title else '')
+        + (f'<p class="role">{role_esc}</p>' if role else '')
         + body
         + (f'<p class="caption">{caption}</p>' if caption else '')
         + '</article>'
@@ -1737,8 +1808,8 @@ PAGE_TEMPLATE = '''<!DOCTYPE html>
 
 
 def build_page(ex, exercises):
-    html = PAGE_TEMPLATE.format(
-        title=f'{ex["title_one"]} {ex["title_em"]}',
+    page_html = PAGE_TEMPLATE.format(
+        title=html.escape(f'{ex["title_one"]} {ex["title_em"]}', quote=True),
         icon_data_uri=ICON_DATA_URI,
         css=PAGE_CSS,
         topbar=_topbar(ex["slug"], exercises),
@@ -1753,8 +1824,8 @@ def build_page(ex, exercises):
         js=PAGE_JS,
     )
     out_path = os.path.join(ROOT, f'{ex["slug"]}.html')
-    with open(out_path, 'w') as f:
-        f.write(html)
+    with open(out_path, 'w', encoding='utf-8') as f:
+        f.write(page_html)
     return out_path
 
 
@@ -1762,6 +1833,57 @@ def build_page(ex, exercises):
 # Landing page
 # ─────────────────────────────────────────────────────────────────────────────
 
+# Index-only CSS kept as a separate raw (non-.format()) string so its literal
+# `{` / `}` don't need brace-doubling. It's concatenated onto PAGE_CSS and passed
+# as the {css} field below.
+INDEX_CSS = r'''
+.index-grid {
+  display: grid; gap: 1rem;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+}
+.index-card {
+  background: var(--card); color: var(--card-ink);
+  padding: 1.4rem 1.2rem; border-radius: 6px;
+  border: 1px solid var(--card-edge);
+  text-decoration: none; display: block;
+  transition: transform 120ms, box-shadow 120ms;
+  position: relative;
+}
+.index-card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.28); }
+.index-card .eyebrow {
+  text-transform: uppercase; letter-spacing: 0.3em; font-size: 0.62rem;
+  color: var(--accent-dark); font-variation-settings: 'opsz' 9, 'wght' 600;
+  margin: 0 0 0.5rem;
+}
+.index-card h2 {
+  margin: 0 0 0.4rem; font-size: 1.3rem;
+  font-variation-settings: 'opsz' 36, 'wght' 600;
+  color: var(--card-ink);
+}
+.index-card h2 em { color: var(--accent-dark); font-style: italic; }
+.index-card p { margin: 0; font-size: 0.92rem; color: var(--card-ink-soft); line-height: 1.45; }
+.section-title {
+  margin: 2.5rem 0 1rem; color: var(--ink); font-size: 1.25rem;
+  font-variation-settings: 'opsz' 36, 'wght' 500;
+}
+.section-title em { color: var(--sage); font-style: italic; }
+.index-intro {
+  max-width: 56ch; color: var(--ink-soft); margin: 0 auto 2.5rem;
+  text-align: center; font-size: 1.05rem;
+}
+.index-intro em { color: var(--sage); font-style: italic; }
+.install-tip {
+  margin: 3rem auto 0; max-width: 60ch; padding: 1.25rem 1.5rem;
+  background: var(--paper-warm); border-radius: 6px;
+  border-left: 3px solid var(--accent); color: var(--ink-soft); font-size: 0.92rem;
+}
+.install-tip strong { color: var(--accent); font-variation-settings: 'opsz' 14, 'wght' 600; }
+.install-tip em { font-style: italic; color: var(--sage); }
+'''
+
+# NOTE: INDEX_TEMPLATE is .format()-ed. The CSS now lives in INDEX_CSS (above) and
+# is injected via {css}, so it needs NO brace-doubling. Only the literal braces in
+# the inline <script> at the bottom still must be doubled ({{ }}).
 INDEX_TEMPLATE = '''<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1776,50 +1898,7 @@ INDEX_TEMPLATE = '''<!DOCTYPE html>
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Louis' E Blues">
 <meta name="theme-color" content="#0a1a2e">
-<style>{css}
-.index-grid {{
-  display: grid; gap: 1rem;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-}}
-.index-card {{
-  background: var(--card); color: var(--card-ink);
-  padding: 1.4rem 1.2rem; border-radius: 6px;
-  border: 1px solid var(--card-edge);
-  text-decoration: none; display: block;
-  transition: transform 120ms, box-shadow 120ms;
-  position: relative;
-}}
-.index-card:hover {{ transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.28); }}
-.index-card .eyebrow {{
-  text-transform: uppercase; letter-spacing: 0.3em; font-size: 0.62rem;
-  color: var(--accent-dark); font-variation-settings: 'opsz' 9, 'wght' 600;
-  margin: 0 0 0.5rem;
-}}
-.index-card h2 {{
-  margin: 0 0 0.4rem; font-size: 1.3rem;
-  font-variation-settings: 'opsz' 36, 'wght' 600;
-  color: var(--card-ink);
-}}
-.index-card h2 em {{ color: var(--accent-dark); font-style: italic; }}
-.index-card p {{ margin: 0; font-size: 0.92rem; color: var(--card-ink-soft); line-height: 1.45; }}
-.section-title {{
-  margin: 2.5rem 0 1rem; color: var(--ink); font-size: 1.25rem;
-  font-variation-settings: 'opsz' 36, 'wght' 500;
-}}
-.section-title em {{ color: var(--sage); font-style: italic; }}
-.index-intro {{
-  max-width: 56ch; color: var(--ink-soft); margin: 0 auto 2.5rem;
-  text-align: center; font-size: 1.05rem;
-}}
-.index-intro em {{ color: var(--sage); font-style: italic; }}
-.install-tip {{
-  margin: 3rem auto 0; max-width: 60ch; padding: 1.25rem 1.5rem;
-  background: var(--paper-warm); border-radius: 6px;
-  border-left: 3px solid var(--accent); color: var(--ink-soft); font-size: 0.92rem;
-}}
-.install-tip strong {{ color: var(--accent); font-variation-settings: 'opsz' 14, 'wght' 600; }}
-.install-tip em {{ font-style: italic; color: var(--sage); }}
-</style>
+<style>{css}</style>
 </head>
 <body>
 <main class="page">
@@ -1865,24 +1944,24 @@ def build_index(exercises):
         cards_html = []
         for ex in items:
             cards_html.append(
-                f'<a class="index-card" href="./{ex["slug"]}.html">'
-                f'<p class="eyebrow">{ex.get("eyebrow_short", ex["eyebrow"])}</p>'
-                f'<h2>{ex["title_one"]} <em>{ex["title_em"]}</em></h2>'
-                f'<p>{ex["subtitle"]}</p></a>'
+                f'<a class="index-card" href="./{html.escape(ex["slug"], quote=True)}.html">'
+                f'<p class="eyebrow">{html.escape(ex.get("eyebrow_short", ex["eyebrow"]), quote=True)}</p>'
+                f'<h2>{html.escape(ex["title_one"], quote=True)} <em>{html.escape(ex["title_em"], quote=True)}</em></h2>'
+                f'<p>{html.escape(ex["subtitle"], quote=True)}</p></a>'
             )
         sections_html.append(
-            f'<h2 class="section-title"><em>{sec_name}</em></h2>'
+            f'<h2 class="section-title"><em>{html.escape(sec_name, quote=True)}</em></h2>'
             f'<section class="index-grid">{"".join(cards_html)}</section>'
         )
 
-    html = INDEX_TEMPLATE.format(
+    index_html = INDEX_TEMPLATE.format(
         icon_data_uri=ICON_DATA_URI,
-        css=PAGE_CSS,
+        css=PAGE_CSS + INDEX_CSS,
         sections='\n'.join(sections_html),
     )
     out_path = os.path.join(ROOT, 'index.html')
-    with open(out_path, 'w') as f:
-        f.write(html)
+    with open(out_path, 'w', encoding='utf-8') as f:
+        f.write(index_html)
     return out_path
 
 
@@ -1907,6 +1986,10 @@ MANIFEST = {
 }
 
 
+# WARNING: SW_TEMPLATE is .format()-ed — every literal JS `{`/`}` below MUST be
+# doubled (`{{`/`}}`). Only {ver} and {precache} are real format fields. (Left
+# inline rather than extracted because the braces are interleaved with the only
+# two substitutions; splitting it out is riskier than the brace-doubling.)
 SW_TEMPLATE = '''const VERSION = '{ver}';
 const CACHE = `louisblues-${{VERSION}}`;
 const PRECACHE = {precache};
@@ -1938,13 +2021,13 @@ self.addEventListener('fetch', (e) => {{
 
 
 def build_assets(exercises):
-    with open(os.path.join(ROOT, 'icon.svg'), 'w') as f:
+    with open(os.path.join(ROOT, 'icon.svg'), 'w', encoding='utf-8') as f:
         f.write(ICON_SVG)
-    with open(os.path.join(ROOT, 'manifest.webmanifest'), 'w') as f:
+    with open(os.path.join(ROOT, 'manifest.webmanifest'), 'w', encoding='utf-8') as f:
         json.dump(MANIFEST, f, indent=2)
     precache = ['./', './index.html'] + [f'./{e["slug"]}.html' for e in exercises] + [
         './manifest.webmanifest', './apple-touch-icon.png', './icon.svg'
     ]
     sw = SW_TEMPLATE.format(ver=f'v{int(time.time())}', precache=json.dumps(precache))
-    with open(os.path.join(ROOT, 'sw.js'), 'w') as f:
+    with open(os.path.join(ROOT, 'sw.js'), 'w', encoding='utf-8') as f:
         f.write(sw)
