@@ -18,7 +18,7 @@ B7_OPEN_S   = [None, 2, 1, 2, 0, 2]
 E7_BARRE_7S = [None, 7, 9, 7, 9, 7]
 E7_OPEN_R = {6: 'R', 5: '5', 4: 'b7', 3: '3', 2: '5', 1: 'R'}
 A7_OPEN_R = {5: 'R', 4: '5', 3: 'b7', 2: '3', 1: '5'}
-B7_OPEN_R = {5: 'R', 4: '3', 3: 'b7', 2: '5', 1: 'b7'}
+B7_OPEN_R = {5: 'R', 4: '3', 3: 'b7', 2: 'R', 1: '5'}
 E7_BARRE_R = {5: 'R', 4: '5', 3: 'b7', 2: '3', 1: '5'}
 
 THREE_CHORDS = [('E7 — I⁷', E7_OPEN_S, E7_OPEN_R),
@@ -57,7 +57,7 @@ CHORD_TO_SHAPE = {'E7': E7_VOICE, 'A7': A7_VOICE, 'B7': B7_VOICE}
 
 
 # A simple two-chord comp pattern (one bar of E7 then one of A7, A-shape voicings):
-# Charleston-ish: chord on 1, rest, chord on the "and of 2", chord on 4. Render as tab.
+# Charleston-ish: chord on beat 1, on the "and of 2", and the "and of 3". Render as tab.
 # We use the A-shape E7 barre at fret 7 and open A7.
 E7_BARRE = [(5,7),(4,9),(3,7),(2,9),(1,7)]  # for tab
 A7_OPEN_NOTES = [(5,0),(4,2),(3,0),(2,2),(1,0)]
@@ -65,7 +65,7 @@ A7_OPEN_NOTES = [(5,0),(4,2),(3,0),(2,2),(1,0)]
 
 def comp_card():
     # 16 sixteenth-note slots per bar of comping for clean rendering: simplify to 16-slot lines.
-    # Pattern (8 slots = eighth notes per bar): X . X . . X . .  (Charleston)
+    # Pattern (8 slots = eighth notes per bar): X . . X . X . .  (Charleston)
     # Two bars, 16 slots total.
     events_bar1 = []
     pattern = [True, False, False, True, False, True, False, False]  # 8th-note pattern
@@ -130,7 +130,7 @@ EXERCISE = {
         },
         {
             "heading": "Comping skeleton",
-            "blurb": "A Charleston-style rhythm — chord on beat 1, on the \"and\" of 2, on beat 4. Bar 1 is E7 (A-shape barre, fret 7); bar 2 is open A7. Loop it.",
+            "blurb": "A Charleston-style rhythm — chord on beat 1, on the \"and\" of 2, on the \"and\" of 3. Bar 1 is E7 (A-shape barre, fret 7); bar 2 is open A7. Loop it.",
             "layout": "full",
             "cards": [
                 {

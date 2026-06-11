@@ -19,7 +19,7 @@ B7_OPEN     = [None, 2, 1, 2, 0, 2]
 E7_OPEN_ROLES   = {6: 'R', 5: '5', 4: 'b7', 3: '3', 2: '5', 1: 'R'}
 E7_BARRE_ROLES  = {5: 'R', 4: '5', 3: 'b7', 2: '3', 1: '5'}
 A7_OPEN_ROLES   = {5: 'R', 4: '5', 3: 'b7', 2: '3', 1: '5'}
-B7_OPEN_ROLES   = {5: 'R', 4: '3', 3: 'b7', 2: '5', 1: 'b7'}
+B7_OPEN_ROLES   = {5: 'R', 4: '3', 3: 'b7', 2: 'R', 1: '5'}
 
 
 def audio_from_bars(bars, bpm=120, gain=0.4, strum=False):

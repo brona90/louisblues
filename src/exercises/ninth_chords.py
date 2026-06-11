@@ -105,11 +105,11 @@ E9_TOP4 = [None, None, 6, 7, 7, 7]
 # Standard rootless E13 strings 4-1: x x 6 7 6 9
 # Check: 4: 6 = G# (3), 3: 7 = D (b7), 2: 6 = E (R? — but we said rootless), 1: 9 = C# (13)
 # Hmm string 2 fret 6 = E (R), that's fine.
-E13_TOP = [None, None, 6, 7, 6, 9]
+E13_TOP = [None, None, 6, 7, 7, 9]
 
 E9_POS1_LABELS = {5: 'R', 4: '3', 3: 'b7', 2: '9', 1: '5'}
 E9_TOP4_LABELS = {4: '3', 3: 'b7', 2: '9', 1: '5'}
-E13_TOP_LABELS = {4: '3', 3: 'b7', 2: 'R', 1: '13'}
+E13_TOP_LABELS = {4: '3', 3: 'b7', 2: '9', 1: '13'}
 
 # A9 — three positions
 # Open A9 isn't easy. Use closed shapes.
@@ -134,8 +134,8 @@ A9_TOP4 = [None, None, 11, 12, 12, 12]   # high rootless A9 on strings 4-1
 A9_POS1_LABELS = {5: 'R', 4: '3', 3: 'b7', 2: '9', 1: '5'}
 A9_LOW_LABELS = {5: '3', 4: 'b7', 3: '9', 2: '5'}
 A9_TOP4_LABELS = {4: '3', 3: 'b7', 2: '9', 1: '5'}
-A13_TOP = [None, None, 11, 12, 11, 14]
-A13_TOP_LABELS = {4: '3', 3: 'b7', 2: 'R', 1: '13'}
+A13_TOP = [None, None, 11, 12, 12, 14]
+A13_TOP_LABELS = {4: '3', 3: 'b7', 2: '9', 1: '13'}
 
 # B9 — three positions
 B9_POS1 = ninth_chord(2)   # root on string 5 fret 2: x 2 1 2 2 2
@@ -150,8 +150,8 @@ B9_POS2_LABELS = {5: 'R', 4: '3', 3: 'b7', 2: '9', 1: '5'}
 # 1 fret 2 = F# ✓
 B9_TOP4 = [None, None, 1, 2, 2, 2]
 B9_TOP4_LABELS = {4: '3', 3: 'b7', 2: '9', 1: '5'}
-B13_TOP = [None, None, 1, 2, 1, 4]
-B13_TOP_LABELS = {4: '3', 3: 'b7', 2: 'R', 1: '13'}
+B13_TOP = [None, None, 1, 2, 2, 4]
+B13_TOP_LABELS = {4: '3', 3: 'b7', 2: '9', 1: '13'}
 
 
 def card(num, title, role, shape, labels, caption):

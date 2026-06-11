@@ -19,7 +19,7 @@ B7_OPEN     = [None, 2, 1, 2, 0, 2]
 
 E7_OPEN_ROLES   = {6: 'R', 5: '5', 4: 'b7', 3: '3', 2: '5', 1: 'R'}
 E7_BARRE_ROLES  = {5: 'R', 4: '5', 3: 'b7', 2: '3', 1: '5'}
-B7_OPEN_ROLES   = {5: 'R', 4: '3', 3: 'b7', 2: '5', 1: 'b7'}
+B7_OPEN_ROLES   = {5: 'R', 4: '3', 3: 'b7', 2: 'R', 1: '5'}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -73,11 +73,11 @@ LICK2 = [[
     n(2, 10, dur=0.5),                 # D — bend up half-step to D#? No, in BB box: B-string fret 10 = A, bend to A#? Just use the b3→3 bend.
     n(3, 9, dur=0.5, bend_to=11, vibrato=True),  # G string fret 9 = E, bend full to F#. Actually the iconic move is b3->3 on string 3 fret 8 in box 4. Let me redo.
 ]]
-# Box 4 BB-style lick: string 3 fret 8 (G), bend half-step to G#. String 2 fret 10 (A) hold.
+# BB-style lick: string 2 fret 8 (G = b3), bend half-step to G# (3). String 2 fret 10 (A) frames it.
 LICK2 = [[
     n(2, 10, dur=0.5),                                    # A
-    n(3, 9, dur=0.5),                                     # B
-    n(3, 8, dur=1.0, bend_to=9, vibrato=True),            # G → bend half-step to G#
+    n(3, 9, dur=0.5),                                     # E
+    n(2, 8, dur=1.0, bend_to=9, vibrato=True),            # G (b3) → bend half-step to G# (3)
     r(0.5),
     n(2, 10, dur=0.5),                                    # A
     n(1, 7, dur=1.0, vibrato=True),                       # B
@@ -89,7 +89,7 @@ LICK2 = [[
 # ─────────────────────────────────────────────────────────────────────────────
 # Slides into a double stop, then walks chromatic.
 LICK3 = [[
-    c([(2, 5), (3, 4)], dur=0.5, slide_into_dir='up'),   # B + B = unison-ish? actually slide into 5/4 box-3 5th
+    c([(2, 5), (3, 4)], dur=0.5, slide_into_dir='up'),   # E + B = a fourth apart; slide into the box-3 double-stop
     c([(2, 5), (3, 4)], dur=0.5),
     c([(2, 7), (3, 7)], dur=0.5, slide_into_dir='up'),   # higher pair
     c([(2, 7), (3, 7)], dur=0.5),
@@ -146,10 +146,12 @@ LICK6 = [[
 # ─────────────────────────────────────────────────────────────────────────────
 # Lick 7: An ending lick — the classic "I, IV, I" turnaround replacement
 # ─────────────────────────────────────────────────────────────────────────────
+# E7#9 "Hendrix chord": x 7 6 7 8 x → E (R) G# (3) D (b7) G (#9).
+E7SHARP9 = [(5, 7), (4, 6), (3, 7), (2, 8)]
 LICK7 = [[
-    c([(4, 1), (3, 1), (2, 0), (1, 0)], dur=1.0),  # E7#9 voicing (Hendrix chord, fingered low)
-    c([(4, 2), (3, 2), (2, 0), (1, 0)], dur=1.0),
-    c([(4, 1), (3, 1), (2, 0), (1, 0)], dur=2.0),
+    c(E7SHARP9, dur=1.0),                          # E7#9 (the Hendrix chord)
+    c(E7SHARP9, dur=1.0),
+    c(E7SHARP9, dur=2.0),
 ], [
     n(6, 0, dur=0.5), n(6, 1, dur=0.5),
     n(6, 2, dur=0.5), n(6, 3, dur=0.5),
@@ -212,7 +214,7 @@ EXERCISE = {
                 make_card("Lick 2", "BB King–style half-step bend (Box 4)",
                           "Bend the ♭3 toward the 3 — and back",
                           LICK2,
-                          "The signature BB King move. String 3 fret 8 (G) bent half-step to G♯ (the major 3) — then sit on the A above it with vibrato. <em>Don't release</em> the bend immediately. Let it cry.",
+                          "The signature BB King move. String 2 fret 8 (G — the ♭3) bent half-step to G♯ (the major 3) — then sit on the A above it with vibrato. <em>Don't release</em> the bend immediately. Let it cry.",
                           chord_labels=['E7'], bars_per_line=1, bpm=80,
                           chords=[('E7 — A barre, fret 7', E7_BARRE_7, E7_BARRE_ROLES)]),
                 make_card("Lick 3", "Chuck Berry double-stops",
@@ -251,9 +253,9 @@ EXERCISE = {
                 make_card("Ending", "Hendrix-style ending (E7♯9 + chromatic walk-up)",
                           "The blues ending you've heard a hundred times",
                           LICK7,
-                          "E7♯9 chord (the &ldquo;Hendrix chord&rdquo;) climbed across two voicings. Then a chromatic walk-up on the low E string into a B7 stab. This is the &ldquo;and we're out&rdquo; sound.",
+                          "The E7♯9 (the &ldquo;Hendrix chord&rdquo;: E · G♯ · D · G) stabbed three times. Then a chromatic walk-up on the low E string into a B7 stab. This is the &ldquo;and we're out&rdquo; sound.",
                           chord_labels=['E7♯9', 'walk → B7'], bars_per_line=2, bpm=90,
-                          chords=[('E7♯9 — Hendrix', [None, None, 1, 1, 0, 0], {4: '3', 3: 'b7', 2: '#9', 1: 'R'}),
+                          chords=[('E7♯9 — Hendrix', [None, 7, 6, 7, 8, None], {5: 'R', 4: '3', 3: 'b7', 2: '#9'}),
                                   ('B7 — open', B7_OPEN, B7_OPEN_ROLES)]),
             ],
         },
