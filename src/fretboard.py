@@ -7,6 +7,9 @@ Two flavours:
 Each returns an inline SVG string sized to drop into a card.
 """
 
+import html
+import sys
+
 # Note name lookup. Index = semitones from C.
 SEMITONE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
 # Open string pitches in semitones from C (E2 = 4, A2 = 9, D3 = 2, G3 = 7, B3 = 11, E4 = 4)
@@ -32,8 +35,6 @@ def chord_box(shape, title=None, base_fret=None, role_labels=None, width=200, he
                    to display below the box.
     """
     # Decide base_fret.
-    played = [(s + 1, f) for s, f in enumerate(shape) if f and f > 0]  # NOTE: s+1 here is wrong order; rework below.
-    # Rebuild properly.
     played = []
     for i, f in enumerate(shape):
         # i=0 corresponds to 6th string (low E)
@@ -53,6 +54,23 @@ def chord_box(shape, title=None, base_fret=None, role_labels=None, width=200, he
 
     frets_shown = 5  # 5 frets in the diagram
 
+    # Warn if the voicing spans more frets than the drawn window — high notes
+    # outside [base_fret+1, base_fret+frets_shown] are silently dropped by the
+    # dot loop below, so surface it on stderr instead of failing invisibly.
+    if played:
+        # Dot loop draws fret f when 0 < y_rel <= frets_shown, where
+        # y_rel = f (base_fret == 0) else f - base_fret + 1.
+        win_lo = 1 if base_fret == 0 else base_fret
+        win_hi = frets_shown if base_fret == 0 else base_fret + frets_shown - 1
+        for string_num, f in played:
+            if f < win_lo or f > win_hi:
+                print(
+                    f"warning: chord_box dot fret {f} (string {string_num}) "
+                    f"outside drawn window [{win_lo},{win_hi}] for "
+                    f"{title or 'chord'} — dot skipped",
+                    file=sys.stderr,
+                )
+
     # SVG geometry
     pad_top = 32
     pad_bottom = 24
@@ -64,38 +82,39 @@ def chord_box(shape, title=None, base_fret=None, role_labels=None, width=200, he
     fret_step = grid_h / frets_shown
 
     out = []
-    out.append(f'<svg class="fretboard chord-box" viewBox="0 0 {width} {height}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="{title or "chord diagram"}">')
+    aria = html.escape(title or "chord diagram", quote=True)
+    out.append(f'<svg class="fretboard chord-box" viewBox="0 0 {width} {height}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="{aria}">')
 
     # Optional title (drawn outside the grid area, in CSS we let the parent caption handle it,
     # but we render a title element for accessibility).
     if title:
-        out.append(f'<title>{title}</title>')
+        out.append(f'<title>{html.escape(title)}</title>')
 
     # Nut: thick horizontal line on top if base_fret == 0, otherwise just a normal fret line + fret number label on side
     if base_fret == 0:
         out.append(f'<rect x="{pad_left - 1}" y="{pad_top - 5}" width="{grid_w + 2}" height="5" fill="currentColor"/>')
     else:
-        out.append(f'<text x="{pad_left - 8}" y="{pad_top + fret_step * 0.65}" font-size="13" fill="currentColor" text-anchor="end" font-style="italic">{base_fret}fr</text>')
+        out.append(f'<text x="{pad_left - 8}" y="{pad_top + fret_step * 0.65:.2f}" font-size="13" fill="currentColor" text-anchor="end" font-style="italic">{base_fret}fr</text>')
 
     # Frets (horizontal lines)
     for fi in range(frets_shown + 1):
         y = pad_top + fi * fret_step
-        out.append(f'<line x1="{pad_left}" y1="{y}" x2="{pad_left + grid_w}" y2="{y}" stroke="currentColor" stroke-width="1.2" opacity="0.6"/>')
+        out.append(f'<line x1="{pad_left}" y1="{y:.2f}" x2="{pad_left + grid_w}" y2="{y:.2f}" stroke="currentColor" stroke-width="1.2" opacity="0.6"/>')
 
     # Strings (vertical lines)
     for si in range(6):
         x = pad_left + si * string_step
-        out.append(f'<line x1="{x}" y1="{pad_top}" x2="{x}" y2="{pad_top + grid_h}" stroke="currentColor" stroke-width="1.2" opacity="0.6"/>')
+        out.append(f'<line x1="{x:.2f}" y1="{pad_top}" x2="{x:.2f}" y2="{pad_top + grid_h}" stroke="currentColor" stroke-width="1.2" opacity="0.6"/>')
 
     # Top markers (O for open, X for muted)
     for i, f in enumerate(shape):
         string_num = 6 - i
         x = pad_left + i * string_step
         if f is None or (isinstance(f, int) and f < 0):
-            out.append(f'<text x="{x}" y="{pad_top - 10}" font-size="14" fill="currentColor" text-anchor="middle" font-style="italic">×</text>')
+            out.append(f'<text x="{x:.2f}" y="{pad_top - 10}" font-size="14" fill="currentColor" text-anchor="middle" font-style="italic">×</text>')
         elif f == 0:
             # Open-string marker — tagged so the playback animation can light it up too.
-            out.append(f'<circle class="fret-dot open-dot" cx="{x}" cy="{pad_top - 13}" r="5" fill="none" stroke="currentColor" stroke-width="1.5" data-s="{string_num}" data-f="0"/>')
+            out.append(f'<circle class="fret-dot open-dot" cx="{x:.2f}" cy="{pad_top - 13}" r="5" fill="none" stroke="currentColor" stroke-width="1.5" data-s="{string_num}" data-f="0"/>')
 
     # Detect barres: a barre is multiple strings at the same fret that's > 0
     # (we draw the lowest such row as a barre). Heuristic: if 2 or more strings
@@ -121,7 +140,7 @@ def chord_box(shape, title=None, base_fret=None, role_labels=None, width=200, he
                     y = pad_top + (y_rel - 0.5) * fret_step
                     x1 = pad_left + lo * string_step
                     x2 = pad_left + hi * string_step
-                    out.append(f'<rect x="{x1 - 9}" y="{y - 9}" width="{x2 - x1 + 18}" height="18" rx="9" fill="currentColor" opacity="0.85"/>')
+                    out.append(f'<rect x="{x1 - 9:.2f}" y="{y - 9:.2f}" width="{x2 - x1 + 18:.2f}" height="18" rx="9" fill="currentColor" opacity="0.85"/>')
 
     # Dots
     for i, f in enumerate(shape):
@@ -136,12 +155,12 @@ def chord_box(shape, title=None, base_fret=None, role_labels=None, width=200, he
         is_root = role == 'R'
         string_num = 6 - i
         if is_root:
-            out.append(f'<circle class="fret-dot root-dot" cx="{x}" cy="{y}" r="10" fill="var(--accent-dark)" stroke="currentColor" stroke-width="1.2" data-s="{string_num}" data-f="{f}"/>')
-            out.append(f'<text x="{x}" y="{y + 4}" font-size="10" fill="var(--card)" text-anchor="middle" font-weight="700" pointer-events="none">R</text>')
+            out.append(f'<circle class="fret-dot root-dot" cx="{x:.2f}" cy="{y:.2f}" r="10" fill="var(--accent-dark)" stroke="currentColor" stroke-width="1.2" data-s="{string_num}" data-f="{f}"/>')
+            out.append(f'<text x="{x:.2f}" y="{y + 4:.2f}" font-size="10" fill="var(--card)" text-anchor="middle" font-weight="700" pointer-events="none">R</text>')
         else:
-            out.append(f'<circle class="fret-dot" cx="{x}" cy="{y}" r="9" fill="currentColor" data-s="{string_num}" data-f="{f}"/>')
+            out.append(f'<circle class="fret-dot" cx="{x:.2f}" cy="{y:.2f}" r="9" fill="currentColor" data-s="{string_num}" data-f="{f}"/>')
             if role:
-                out.append(f'<text x="{x}" y="{y + 4}" font-size="10" fill="var(--card)" text-anchor="middle" font-weight="600" pointer-events="none">{role}</text>')
+                out.append(f'<text x="{x:.2f}" y="{y + 4:.2f}" font-size="10" fill="var(--card)" text-anchor="middle" font-weight="600" pointer-events="none">{html.escape(role)}</text>')
 
     # Bottom note-name labels under each string (note at that string and fret)
     for i, f in enumerate(shape):
@@ -151,7 +170,7 @@ def chord_box(shape, title=None, base_fret=None, role_labels=None, width=200, he
             continue
         name = note_at(string_num, f)
         y_label = pad_top + grid_h + 14
-        out.append(f'<text x="{x}" y="{y_label}" font-size="11" fill="currentColor" text-anchor="middle" opacity="0.8">{name}</text>')
+        out.append(f'<text x="{x:.2f}" y="{y_label}" font-size="11" fill="currentColor" text-anchor="middle" opacity="0.8">{html.escape(name)}</text>')
 
     out.append('</svg>')
     return ''.join(out)
@@ -213,9 +232,10 @@ def scale_box(positions, fret_range, title=None, root_pitch_class=None, width=56
     fret_step = grid_w / n_frets  # n_frets cells
 
     out = []
-    out.append(f'<svg class="fretboard scale-box" viewBox="0 0 {width} {height}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="{title or "scale diagram"}">')
+    aria = html.escape(title or "scale diagram", quote=True)
+    out.append(f'<svg class="fretboard scale-box" viewBox="0 0 {width} {height}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="{aria}">')
     if title:
-        out.append(f'<title>{title}</title>')
+        out.append(f'<title>{html.escape(title)}</title>')
 
     # Nut on left if start == 0
     if start == 0:
@@ -224,7 +244,7 @@ def scale_box(positions, fret_range, title=None, root_pitch_class=None, width=56
     # Fret lines (vertical)
     for fi in range(n_frets + 1):
         x = pad_left + fi * fret_step
-        out.append(f'<line x1="{x}" y1="{pad_top}" x2="{x}" y2="{pad_top + grid_h}" stroke="currentColor" stroke-width="1.1" opacity="0.6"/>')
+        out.append(f'<line x1="{x:.2f}" y1="{pad_top}" x2="{x:.2f}" y2="{pad_top + grid_h}" stroke="currentColor" stroke-width="1.1" opacity="0.6"/>')
 
     # String lines (horizontal); string 1 (high E) is at top? Convention varies. Most guitar diagrams put 6=low E at bottom, 1=high E at top. We follow that.
     for si in range(6):
@@ -233,7 +253,7 @@ def scale_box(positions, fret_range, title=None, root_pitch_class=None, width=56
         y = pad_top + si * string_step
         # vary stroke weight slightly so low strings look thicker
         sw = 0.9 + (string_num / 12) * 1.0
-        out.append(f'<line x1="{pad_left}" y1="{y}" x2="{pad_left + grid_w}" y2="{y}" stroke="currentColor" stroke-width="{sw:.2f}" opacity="0.6"/>')
+        out.append(f'<line x1="{pad_left}" y1="{y:.2f}" x2="{pad_left + grid_w}" y2="{y:.2f}" stroke="currentColor" stroke-width="{sw:.2f}" opacity="0.6"/>')
 
     # Fret number markers below
     # cell fi (1-indexed) represents fret: fi when start==0, else (start + fi - 1)
@@ -245,14 +265,14 @@ def scale_box(positions, fret_range, title=None, root_pitch_class=None, width=56
             # single-dot inlay between strings 3 and 4
             x = pad_left + (fi - 0.5) * fret_step
             y = pad_top + 2.5 * string_step
-            out.append(f'<circle cx="{x}" cy="{y}" r="3" fill="currentColor" opacity="0.18"/>')
+            out.append(f'<circle cx="{x:.2f}" cy="{y:.2f}" r="3" fill="currentColor" opacity="0.18"/>')
         if actual_fret == 12 and fi > 0:
             # double-dot
             x = pad_left + (fi - 0.5) * fret_step
             y1 = pad_top + 1.5 * string_step
             y2 = pad_top + 3.5 * string_step
-            out.append(f'<circle cx="{x}" cy="{y1}" r="3" fill="currentColor" opacity="0.18"/>')
-            out.append(f'<circle cx="{x}" cy="{y2}" r="3" fill="currentColor" opacity="0.18"/>')
+            out.append(f'<circle cx="{x:.2f}" cy="{y1:.2f}" r="3" fill="currentColor" opacity="0.18"/>')
+            out.append(f'<circle cx="{x:.2f}" cy="{y2:.2f}" r="3" fill="currentColor" opacity="0.18"/>')
 
     # Fret numbers along the bottom + side-label for non-zero start
     if start > 0:
@@ -263,7 +283,7 @@ def scale_box(positions, fret_range, title=None, root_pitch_class=None, width=56
         actual_fret = cell_fret(fi)
         x = pad_left + (fi - 0.5) * fret_step
         y_label = pad_top + grid_h + 14
-        out.append(f'<text x="{x}" y="{y_label}" font-size="10" fill="currentColor" text-anchor="middle" opacity="0.55">{actual_fret}</text>')
+        out.append(f'<text x="{x:.2f}" y="{y_label}" font-size="10" fill="currentColor" text-anchor="middle" opacity="0.55">{actual_fret}</text>')
 
     # Dots
     for entry in positions:
@@ -276,17 +296,26 @@ def scale_box(positions, fret_range, title=None, root_pitch_class=None, width=56
             # open string — draw to the left of the nut as a small circle
             x = pad_left - 16
         else:
+            # Guard: a fretted dot outside the drawn window would be placed
+            # off-canvas with no visible error. Skip it and warn loudly.
+            if fret < start or fret > end:
+                print(
+                    f"warning: scale_box dot fret {fret} outside window "
+                    f"[{start},{end}] — skipped",
+                    file=sys.stderr,
+                )
+                continue
             fi = fret if start == 0 else fret - start + 1
             x = pad_left + (fi - 0.5) * fret_step
         y = pad_top + (string_num - 1) * string_step  # string 1 at top
         is_root = (role == 'R') or (root_pitch_class is not None and note_at(string_num, fret) == root_pitch_class)
         if is_root:
-            out.append(f'<circle class="fret-dot root-dot" cx="{x}" cy="{y}" r="11" fill="var(--accent)" stroke="currentColor" stroke-width="1.4" data-s="{string_num}" data-f="{fret}"/>')
-            out.append(f'<text x="{x}" y="{y + 4}" font-size="10" fill="var(--paper)" text-anchor="middle" font-weight="700" pointer-events="none">R</text>')
+            out.append(f'<circle class="fret-dot root-dot" cx="{x:.2f}" cy="{y:.2f}" r="11" fill="var(--accent)" stroke="currentColor" stroke-width="1.4" data-s="{string_num}" data-f="{fret}"/>')
+            out.append(f'<text x="{x:.2f}" y="{y + 4:.2f}" font-size="10" fill="var(--paper)" text-anchor="middle" font-weight="700" pointer-events="none">R</text>')
         else:
-            out.append(f'<circle class="fret-dot" cx="{x}" cy="{y}" r="10" fill="currentColor" data-s="{string_num}" data-f="{fret}"/>')
+            out.append(f'<circle class="fret-dot" cx="{x:.2f}" cy="{y:.2f}" r="10" fill="currentColor" data-s="{string_num}" data-f="{fret}"/>')
             if role:
-                out.append(f'<text x="{x}" y="{y + 3.5}" font-size="9" fill="var(--card)" text-anchor="middle" font-weight="600" pointer-events="none">{role}</text>')
+                out.append(f'<text x="{x:.2f}" y="{y + 3.5:.2f}" font-size="9" fill="var(--card)" text-anchor="middle" font-weight="600" pointer-events="none">{html.escape(role)}</text>')
 
     out.append('</svg>')
     return ''.join(out)

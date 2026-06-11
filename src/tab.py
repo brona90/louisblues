@@ -27,6 +27,8 @@ opts is a dict with any of:
   hammer_to, pull_to, vibrato, pm, ghost, tie_next, accent, audio_note
 """
 
+import html
+
 
 # ────────────────────────────────────────────────────────────────────
 # Helpers — build events in a readable way
@@ -100,7 +102,7 @@ STEM_H = 18
 
 def _stem(out, x, y_top, dur, fill='currentColor'):
     """Draw a stem line only — flags / beams are added later by _beam_bar."""
-    out.append(f'<line x1="{x}" y1="{y_top}" x2="{x}" y2="{y_top + STEM_H}" stroke="{fill}" stroke-width="1.1"/>')
+    out.append(f'<line x1="{x:.2f}" y1="{y_top:.2f}" x2="{x:.2f}" y2="{y_top + STEM_H:.2f}" stroke="{fill}" stroke-width="1.1"/>')
 
 
 def _flag_count(dur):
@@ -141,13 +143,13 @@ def _beam_bar(out, event_info_list, stem_y_top):
             n_flags = _flag_count(g['ev'][-1].get('dur', 1.0))
             for k in range(n_flags):
                 yy = bottom - k * 4
-                out.append(f'<path d="M{x} {yy} Q{x + 7} {yy + 3} {x + 6} {yy + 8}" '
+                out.append(f'<path d="M{x:.2f} {yy:.2f} Q{x + 7:.2f} {yy + 3:.2f} {x + 6:.2f} {yy + 8:.2f}" '
                            f'fill="none" stroke="currentColor" stroke-width="1.2"/>')
         else:
             # Beam group — primary (8th) beam across whole run
             xs = [g['note_x'] for g in group]
             x1, x2 = xs[0], xs[-1]
-            out.append(f'<rect x="{x1 - 0.5}" y="{bottom - 3}" width="{x2 - x1 + 1}" '
+            out.append(f'<rect x="{x1 - 0.5:.2f}" y="{bottom - 3:.2f}" width="{x2 - x1 + 1:.2f}" '
                        f'height="3.5" fill="currentColor"/>')
             # Secondary (16th) beam — only between adjacent 16ths.
             # Find sub-runs of 2+ adjacent 16ths.
@@ -161,16 +163,16 @@ def _beam_bar(out, event_info_list, stem_y_top):
                     if m - k >= 2:
                         sx1 = group[k]['note_x']
                         sx2 = group[m - 1]['note_x']
-                        out.append(f'<rect x="{sx1 - 0.5}" y="{bottom - 8}" '
-                                   f'width="{sx2 - sx1 + 1}" height="3" fill="currentColor"/>')
+                        out.append(f'<rect x="{sx1 - 0.5:.2f}" y="{bottom - 8:.2f}" '
+                                   f'width="{sx2 - sx1 + 1:.2f}" height="3" fill="currentColor"/>')
                     elif m - k == 1:
                         # single 16th in a beam group — partial beam stub
                         sx = group[k]['note_x']
                         # decide direction: stub to the right if first/middle, left if last
                         if k == 0 or _flag_count(group[k - 1]['ev'][-1].get('dur', 1.0)) < 2:
-                            out.append(f'<rect x="{sx}" y="{bottom - 8}" width="6" height="3" fill="currentColor"/>')
+                            out.append(f'<rect x="{sx:.2f}" y="{bottom - 8:.2f}" width="6" height="3" fill="currentColor"/>')
                         else:
-                            out.append(f'<rect x="{sx - 6}" y="{bottom - 8}" width="6" height="3" fill="currentColor"/>')
+                            out.append(f'<rect x="{sx - 6:.2f}" y="{bottom - 8:.2f}" width="6" height="3" fill="currentColor"/>')
                     k = m
                 else:
                     k += 1
@@ -183,9 +185,9 @@ def _draw_note_text(out, x, y, fret_text, fill='currentColor', bg='var(--card)',
         label = f'({fret_text})'
     w = max(11, 7 * len(label))
     bg_color = bg
-    out.append(f'<rect x="{x - w/2}" y="{y - 7}" width="{w}" height="14" fill="{bg_color}" rx="2"/>')
+    out.append(f'<rect x="{x - w/2:.2f}" y="{y - 7:.2f}" width="{w}" height="14" fill="{bg_color}" rx="2"/>')
     weight = '700' if accent else '600'
-    out.append(f'<text x="{x}" y="{y + 4}" font-size="11.5" fill="{fill}" text-anchor="middle" font-weight="{weight}">{label}</text>')
+    out.append(f'<text x="{x:.2f}" y="{y + 4:.2f}" font-size="11.5" fill="{fill}" text-anchor="middle" font-weight="{weight}">{html.escape(label)}</text>')
 
 
 def _bend_arrow(out, x, y, target_text):
@@ -193,54 +195,54 @@ def _bend_arrow(out, x, y, target_text):
     # Arrow rises up-and-right ~16px, points at the target text
     ax = x + 14
     ay = y - 22
-    out.append(f'<path d="M{x} {y - 8} Q{x + 4} {y - 18} {ax} {ay}" fill="none" stroke="currentColor" stroke-width="1.2"/>')
+    out.append(f'<path d="M{x:.2f} {y - 8:.2f} Q{x + 4:.2f} {y - 18:.2f} {ax:.2f} {ay:.2f}" fill="none" stroke="currentColor" stroke-width="1.2"/>')
     # arrowhead
-    out.append(f'<path d="M{ax - 3} {ay + 4} L{ax} {ay} L{ax + 3} {ay + 4}" fill="none" stroke="currentColor" stroke-width="1.2"/>')
-    out.append(f'<text x="{ax + 5}" y="{ay + 4}" font-size="9.5" fill="currentColor" font-style="italic">{target_text}</text>')
+    out.append(f'<path d="M{ax - 3:.2f} {ay + 4:.2f} L{ax:.2f} {ay:.2f} L{ax + 3:.2f} {ay + 4:.2f}" fill="none" stroke="currentColor" stroke-width="1.2"/>')
+    out.append(f'<text x="{ax + 5:.2f}" y="{ay + 4:.2f}" font-size="9.5" fill="currentColor" font-style="italic">{html.escape(str(target_text))}</text>')
 
 
 def _release_arrow(out, x, y, target_text):
     """Bend-release: arrow curving down."""
     ax = x + 14
     ay = y + 22
-    out.append(f'<path d="M{x} {y + 8} Q{x + 4} {y + 18} {ax} {ay}" fill="none" stroke="currentColor" stroke-width="1.2"/>')
-    out.append(f'<path d="M{ax - 3} {ay - 4} L{ax} {ay} L{ax + 3} {ay - 4}" fill="none" stroke="currentColor" stroke-width="1.2"/>')
-    out.append(f'<text x="{ax + 5}" y="{ay + 4}" font-size="9.5" fill="currentColor" font-style="italic">{target_text}</text>')
+    out.append(f'<path d="M{x:.2f} {y + 8:.2f} Q{x + 4:.2f} {y + 18:.2f} {ax:.2f} {ay:.2f}" fill="none" stroke="currentColor" stroke-width="1.2"/>')
+    out.append(f'<path d="M{ax - 3:.2f} {ay - 4:.2f} L{ax:.2f} {ay:.2f} L{ax + 3:.2f} {ay - 4:.2f}" fill="none" stroke="currentColor" stroke-width="1.2"/>')
+    out.append(f'<text x="{ax + 5:.2f}" y="{ay + 4:.2f}" font-size="9.5" fill="currentColor" font-style="italic">{html.escape(str(target_text))}</text>')
 
 
 def _slur(out, x1, y1, x2, y2, label):
     """Curved slur (hammer-on / pull-off) above the strings, with text label."""
     cx = (x1 + x2) / 2
     cy = min(y1, y2) - 13
-    out.append(f'<path d="M{x1} {y1 - 5} Q{cx} {cy} {x2} {y2 - 5}" fill="none" stroke="currentColor" stroke-width="1.1"/>')
-    out.append(f'<text x="{cx}" y="{cy + 2}" font-size="10" fill="currentColor" text-anchor="middle" font-style="italic" opacity="0.8">{label}</text>')
+    out.append(f'<path d="M{x1:.2f} {y1 - 5:.2f} Q{cx:.2f} {cy:.2f} {x2:.2f} {y2 - 5:.2f}" fill="none" stroke="currentColor" stroke-width="1.1"/>')
+    out.append(f'<text x="{cx:.2f}" y="{cy + 2:.2f}" font-size="10" fill="currentColor" text-anchor="middle" font-style="italic" opacity="0.8">{html.escape(str(label))}</text>')
 
 
 def _vibrato(out, x, y, width=22):
     """Squiggle above the note."""
     yy = y - 16
-    d = f'M{x - 2} {yy}'
+    d = f'M{x - 2:.2f} {yy:.2f}'
     n_waves = 4
     step = width / n_waves
     for i in range(n_waves):
         x1 = x - 2 + (i + 0.5) * step
         ydir = -3 if i % 2 == 0 else 3
-        d += f' Q{x1} {yy + ydir} {x - 2 + (i + 1) * step} {yy}'
+        d += f' Q{x1:.2f} {yy + ydir:.2f} {x - 2 + (i + 1) * step:.2f} {yy:.2f}'
     out.append(f'<path d="{d}" fill="none" stroke="currentColor" stroke-width="1.1"/>')
 
 
 def _palm_mute(out, x1, x2, y):
     """PM bracket above a passage."""
     yy = y - 22
-    out.append(f'<text x="{x1 - 2}" y="{yy + 3}" font-size="9.5" fill="currentColor" font-style="italic" font-weight="600">PM</text>')
-    out.append(f'<line x1="{x1 + 18}" y1="{yy}" x2="{x2}" y2="{yy}" stroke="currentColor" stroke-width="0.9" stroke-dasharray="3 2"/>')
+    out.append(f'<text x="{x1 - 2:.2f}" y="{yy + 3:.2f}" font-size="9.5" fill="currentColor" font-style="italic" font-weight="600">PM</text>')
+    out.append(f'<line x1="{x1 + 18:.2f}" y1="{yy:.2f}" x2="{x2:.2f}" y2="{yy:.2f}" stroke="currentColor" stroke-width="0.9" stroke-dasharray="3 2"/>')
 
 
 def _slide_line(out, x1, y1, x2, y2):
-    out.append(f'<line x1="{x1 + 6}" y1="{y1}" x2="{x2 - 6}" y2="{y2}" stroke="currentColor" stroke-width="1.2"/>')
+    out.append(f'<line x1="{x1 + 6:.2f}" y1="{y1:.2f}" x2="{x2 - 6:.2f}" y2="{y2:.2f}" stroke="currentColor" stroke-width="1.2"/>')
 
 
-def _draw_event(out, ev, x_left, x_right, y_top, string_step, pad_top, beat_step, prev_event_x=None):
+def _draw_event(out, ev, x_left, x_right, string_step, pad_top):
     """Draw one event in the slot x_left..x_right. Returns dict of post-render info (e.g. note positions)."""
     info = {}
     kind = ev[0]
@@ -252,7 +254,7 @@ def _draw_event(out, ev, x_left, x_right, y_top, string_step, pad_top, beat_step
         # Rest glyph: simple text. position rest in the vertical centre of staff
         y = pad_top + 2.5 * string_step
         sym = '𝄽' if dur >= 1.0 else '𝄾' if dur >= 0.5 else '𝄿'
-        out.append(f'<text x="{x_center}" y="{y + 6}" font-size="20" fill="currentColor" text-anchor="middle" opacity="0.55">{sym}</text>')
+        out.append(f'<text x="{x_center:.2f}" y="{y + 6:.2f}" font-size="20" fill="currentColor" text-anchor="middle" opacity="0.55">{sym}</text>')
         return info
 
     if kind == 'note':
@@ -285,9 +287,9 @@ def _draw_event(out, ev, x_left, x_right, y_top, string_step, pad_top, beat_step
         if opts.get('vibrato'):
             _vibrato(out, x_center, y)
         if opts.get('slide_into_dir') == 'up':
-            out.append(f'<line x1="{x_center - 14}" y1="{y + 6}" x2="{x_center - 6}" y2="{y}" stroke="currentColor" stroke-width="1.1"/>')
+            out.append(f'<line x1="{x_center - 14:.2f}" y1="{y + 6:.2f}" x2="{x_center - 6:.2f}" y2="{y:.2f}" stroke="currentColor" stroke-width="1.1"/>')
         elif opts.get('slide_into_dir') == 'down':
-            out.append(f'<line x1="{x_center - 14}" y1="{y - 6}" x2="{x_center - 6}" y2="{y}" stroke="currentColor" stroke-width="1.1"/>')
+            out.append(f'<line x1="{x_center - 14:.2f}" y1="{y - 6:.2f}" x2="{x_center - 6:.2f}" y2="{y:.2f}" stroke="currentColor" stroke-width="1.1"/>')
         dur = opts.get('dur', 1.0)
         if dur < 1.5:
             _stem(out, x_center, pad_top + 5 * string_step + 6, dur)
@@ -355,7 +357,7 @@ def render_tab(bars,
 
     out = [f'<svg class="tab tab-rich" viewBox="0 0 {width} {total_height}" xmlns="http://www.w3.org/2000/svg">']
     if title:
-        out.append(f'<text x="{width/2}" y="14" font-size="13" fill="currentColor" text-anchor="middle" font-style="italic" opacity="0.75">{title}</text>')
+        out.append(f'<text x="{width/2:.2f}" y="14" font-size="13" fill="currentColor" text-anchor="middle" font-style="italic" opacity="0.75">{html.escape(title)}</text>')
 
     # Every bar takes a uniform amount of horizontal space — one "bar unit"
     # equals `beat_unit` beats and is `grid_w / bars_per_line` pixels wide.
@@ -380,21 +382,21 @@ def render_tab(bars,
         for si in range(6):
             y = line_y_top + pad_top + si * string_step
             sw = 0.85 + (si / 12) * 0.6
-            out.append(f'<line x1="{pad_left}" y1="{y}" x2="{line_end_x}" y2="{y}" stroke="currentColor" stroke-width="{sw:.2f}" opacity="0.55"/>')
+            out.append(f'<line x1="{pad_left}" y1="{y:.2f}" x2="{line_end_x:.2f}" y2="{y:.2f}" stroke="currentColor" stroke-width="{sw:.2f}" opacity="0.55"/>')
 
         # T A B letters on left
         for i, ch in enumerate(['T', 'A', 'B']):
             y = line_y_top + pad_top + (1.0 + i * 1.5) * string_step + 4
-            out.append(f'<text x="{pad_left - 8}" y="{y}" font-size="13" fill="currentColor" text-anchor="end" font-style="italic" opacity="0.5">{ch}</text>')
+            out.append(f'<text x="{pad_left - 8}" y="{y:.2f}" font-size="13" fill="currentColor" text-anchor="end" font-style="italic" opacity="0.5">{ch}</text>')
 
         # Bar lines
         for x in bar_x_starts:
-            out.append(f'<line x1="{x}" y1="{line_y_top + pad_top - 4}" x2="{x}" y2="{line_y_top + pad_top + grid_h + 4}" stroke="currentColor" stroke-width="1.1" opacity="0.6"/>')
+            out.append(f'<line x1="{x:.2f}" y1="{line_y_top + pad_top - 4}" x2="{x:.2f}" y2="{line_y_top + pad_top + grid_h + 4}" stroke="currentColor" stroke-width="1.1" opacity="0.6"/>')
 
         # Final double bar at end of last line
         if line_idx == n_lines - 1:
             x_end = bar_x_starts[-1]
-            out.append(f'<line x1="{x_end - 3}" y1="{line_y_top + pad_top - 4}" x2="{x_end - 3}" y2="{line_y_top + pad_top + grid_h + 4}" stroke="currentColor" stroke-width="1.4" opacity="0.7"/>')
+            out.append(f'<line x1="{x_end - 3:.2f}" y1="{line_y_top + pad_top - 4}" x2="{x_end - 3:.2f}" y2="{line_y_top + pad_top + grid_h + 4}" stroke="currentColor" stroke-width="1.4" opacity="0.7"/>')
 
         # Per-bar drawing
         first_bar_in_line = line_idx * bars_per_line
@@ -406,11 +408,11 @@ def render_tab(bars,
 
             # Chord label above
             if chord_labels and global_bar_idx < len(chord_labels) and chord_labels[global_bar_idx]:
-                out.append(f'<text x="{bar_x_left + 4}" y="{line_y_top + pad_top - 14}" font-size="13" fill="var(--accent)" font-weight="700" font-style="italic">{chord_labels[global_bar_idx]}</text>')
+                out.append(f'<text x="{bar_x_left + 4:.2f}" y="{line_y_top + pad_top - 14}" font-size="13" fill="var(--accent)" font-weight="700" font-style="italic">{html.escape(str(chord_labels[global_bar_idx]))}</text>')
 
             # Bar number
             if show_bar_numbers:
-                out.append(f'<text x="{bar_x_left + 2}" y="{line_y_top + pad_top - 26}" font-size="9" fill="currentColor" opacity="0.4">{start_bar + global_bar_idx}</text>')
+                out.append(f'<text x="{bar_x_left + 2:.2f}" y="{line_y_top + pad_top - 26}" font-size="9" fill="currentColor" opacity="0.4">{start_bar + global_bar_idx}</text>')
 
             # Layout events within the bar by duration
             bar_total_dur = sum(_event_dur(e) for e in bar)
@@ -432,8 +434,7 @@ def render_tab(bars,
                     note_seq += 1
                     ev = ev[:-1] + (new_opts,)
                 info = _draw_event(out, ev, cur_x, cur_x + slot_w,
-                                    line_y_top + pad_top, string_step,
-                                    line_y_top + pad_top, slot_w)
+                                    string_step, line_y_top + pad_top)
                 info['x_left'] = cur_x
                 info['x_right'] = cur_x + slot_w
                 info['ev'] = ev
